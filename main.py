@@ -3,12 +3,15 @@ from fastapi import FastAPI
 import redis
 from random import randint
 
+
 app = FastAPI(
     title='ReportWB',
     description='API Для работы с рекламой WB',
     version='0.0.1')
 
 
+# Коннектор к Redis
+# Вставляем свои данные к своей бзе Redis
 client = redis.Redis(host="localhost",
                 port=49153,
                 username="default",
@@ -18,17 +21,21 @@ client = redis.Redis(host="localhost",
                 decode_responses=True)
 
 
+
+# РАБОТА С БАЗОЙ
+# Запись нового голосования id - идентификатор голосования name - название голосования list_option - ответы
 def set_vote(id, name, list_option):
     client.lpush(id, name)
     for option in list_option:
         client.rpush(id, f"{option}:0")
     client.rpush(id, f"counter:0")
 
+# Запрос нужного голосования по id
 def get_vote(id):
     vote = client.lrange(id, 0, -1)
     return vote
 
-
+# Процес голосования. Добавляет 1 к необходимому ответу из списка
 def set_vote_option(id, option):
     options = client.lrange(id, 0, -1)
     n = False
@@ -48,12 +55,14 @@ def set_vote_option(id, option):
     return n
 
 
+# Метод создания нового голосования
 @app.post("/vote/new_vote/")
 async def new_vote_p(name_vote: str, list_option: list[str]):
     id = f"{randint(0,1000)}{randint(0,1000)}{randint(0,1000)}"
     set_vote(id, name_vote, list_option)
     return id
 
+# Метод непосредственного голосования
 @app.post("/vote/vote_option/")
 async def get_vote_p(id_vote: str, option: str):
     vote = set_vote_option(id_vote, option)
@@ -62,6 +71,7 @@ async def get_vote_p(id_vote: str, option: str):
     else:
         return "Среди вопросов нет вашего. Попробуйте проголосовать еще раз!"
 
+# Метод получения результатов голосования
 @app.post("/vote/get_vote/")
 async def get_vote_p(id_vote: str):
     list_vo = get_vote(id_vote)
@@ -73,6 +83,7 @@ async def get_vote_p(id_vote: str):
         response += f"-- {x} : {round((y / count) * 100, 2)}% --"
     response += f"Всего проголосовало : {count}"
     return response
+
 
 if __name__ == '__main__':
     uvicorn.run(
